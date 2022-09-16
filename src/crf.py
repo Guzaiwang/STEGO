@@ -11,6 +11,7 @@ import torchvision.transforms.functional as VF
 from utils import unnorm
 
 MAX_ITER = 10
+
 POS_W = 3
 POS_XY_STD = 1
 Bi_W = 4
