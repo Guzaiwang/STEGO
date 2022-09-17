@@ -25,12 +25,12 @@ import torchvision.datasets as datasets
 
 import timm
 
-assert timm.__version == "0.3.2"
+assert timm.__version__ == "0.3.2"
 import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
-
+from util.datasets import CellDataset
 import models_mae
 
 from engine_pretrain import train_one_epoch
@@ -45,7 +45,7 @@ def get_args_parser():
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='mae_vit_large_patch16', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='mae_vit_base_patch16', type=str, metavar='MODEL',
                         help='Name of model to train')
 
     parser.add_argument('--input_size', default=224, type=int,
@@ -73,7 +73,7 @@ def get_args_parser():
                         help='epochs to warmup LR')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
+    parser.add_argument('--data_path', default='', type=str,
                         help='dataset path')
 
     parser.add_argument('--output_dir', default='./output_dir',
@@ -127,14 +127,18 @@ def main(args):
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     # TODO:rewrite dataset
-    dataset_train = datasets.ImageFolder(
-        os.path.join(args.data_path, 'train'), transform=transform_train
-    )
-    print(dataset_train)
+    # dataset_train = datasets.ImageFolder(
+    #     os.path.join(args.data_path, 'train'), transform=transform_train
+    # )
+    cell_path = '/home/zaiwang/Data/Cell_split/Lung5_Rep1/nuclear'
+    dataset_train = CellDataset(cell_path, transform_train)
+    print('dataset_train is :', dataset_train)
 
     if True:  # args.distributed
         num_tasks = misc.get_world_size()
         global_rank = misc.get_rank()
+        print(global_rank, "global rand")
+        print(num_tasks)
         sampler_train = torch.utils.data.DistributedSampler(
             dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
         )
@@ -142,6 +146,7 @@ def main(args):
     else:
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
+    global_rank = misc.get_rank()
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
         log_writer = SummaryWriter(log_dir=args.log_dir)
@@ -149,7 +154,8 @@ def main(args):
         log_writer = None
 
     data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
+        dataset_train,
+        sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
